@@ -1,14 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { StoryResponse } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 /**
  * Generates an extremely detailed technical prompt based on the provided image.
  * Tailored for FaceID/ControlNet reconstruction workflows.
  */
 export const generateStoryFromImage = async (base64Image: string): Promise<StoryResponse> => {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const cleanBase64 = base64Image.split(',')[1] || base64Image;
 
     const systemInstruction = `
@@ -86,6 +85,7 @@ export const generateImageWithGemini = async (
   referenceImage: string | null
 ): Promise<string> => {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const parts: any[] = [{ text: prompt }];
 
     // Add reference image if provided (for image-to-image or style transfer context)

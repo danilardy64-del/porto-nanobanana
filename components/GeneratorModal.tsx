@@ -29,11 +29,36 @@ export const GeneratorModal: React.FC<GeneratorModalProps> = ({ onClose }) => {
   };
 
   const handleGenerate = async () => {
+    // API Key Selection for gemini-3-pro-image-preview
+    const aistudio = (window as any).aistudio;
+    if (aistudio) {
+        const hasKey = await aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+            try {
+                await aistudio.openSelectKey();
+            } catch (e) {
+                // User cancelled or error
+                return;
+            }
+        }
+    }
+
     setState(prev => ({ ...prev, isGenerating: true, error: null }));
     try {
       const result = await generateImageWithGemini(state.prompt, state.aspectRatio, state.referenceImage);
       setState(prev => ({ ...prev, isGenerating: false, resultImage: result }));
     } catch (err: any) {
+      // Check for "Requested entity was not found" to retry key selection
+      if (err.message && err.message.includes("Requested entity was not found") && aistudio) {
+         try {
+             await aistudio.openSelectKey();
+             // Inform user to try again
+             setState(prev => ({ ...prev, isGenerating: false, error: "API Key updated. Please try again." }));
+             return;
+         } catch (e) {
+             // ignore
+         }
+      }
       setState(prev => ({ ...prev, isGenerating: false, error: err.message }));
     }
   };
