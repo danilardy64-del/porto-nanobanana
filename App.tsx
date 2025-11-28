@@ -2,12 +2,19 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { PortfolioItem, StoryResponse } from './types';
 import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
-import { GeneratorModal } from './components/GeneratorModal';
 import { generateStoryFromImage } from './services/geminiService';
 import { savePortfolioToDB, loadPortfolioFromDB } from './utils/storage';
 
 const TOTAL_SLOTS = 50;
 const OWNER_PASSWORD = "@Hilo123";
+
+const EXTERNAL_LINKS = [
+  { name: "GEMINI", url: "https://gemini.google.com/" },
+  { name: "PIXVERSE", url: "https://pixverse.ai/" },
+  { name: "PIPIT AI", url: "https://pippit.ai/id-id" },
+  { name: "HIGGSFIELD", url: "https://higgsfield.ai/" },
+  { name: "SEAART AGENT", url: "https://www.seaart.ai/agent/d4fekqde878c73ebah70" },
+];
 
 const App: React.FC = () => {
   // Initialize 50 empty slots initially
@@ -23,7 +30,6 @@ const App: React.FC = () => {
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [selectedItem, setSelectedItem] = useState<PortfolioItem | null>(null);
-  const [showGenerator, setShowGenerator] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(1);
   const [totalVisits, setTotalVisits] = useState(0);
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
@@ -348,8 +354,12 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-12 relative z-10">
-        <div className="mb-16 max-w-3xl mx-auto text-center">
-            <div className="bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transform -rotate-1 transition-transform hover:rotate-0">
+        
+        {/* HERO SECTION - SPLIT LAYOUT */}
+        <div className="mb-16 max-w-6xl mx-auto flex flex-col lg:flex-row gap-8 items-start">
+            
+            {/* Title Box */}
+            <div className="flex-1 w-full bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-center">
                 <div className="inline-block bg-yellow-300 border-2 border-black px-4 py-1 mb-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                     <h3 className="text-sm font-black uppercase tracking-widest">Digital Portfolio</h3>
                 </div>
@@ -386,14 +396,36 @@ const App: React.FC = () => {
                     <span className="mr-2 text-xl">+</span>
                     {isProcessingBulk ? 'Uploading Sequentially...' : 'Add Photos'}
                     </button>
+                </div>
+            </div>
 
-                    <button 
-                    onClick={() => setShowGenerator(true)}
-                    className="group relative inline-flex items-center justify-center px-6 py-3 bg-yellow-400 text-black font-bold uppercase tracking-widest border-2 border-black hover:bg-yellow-300 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
-                    >
-                    <span className="mr-2 text-xl">✨</span>
-                    Try Generate Img
-                    </button>
+            {/* Side Links Box */}
+            <div className="w-full lg:w-72 bg-yellow-300 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                <div className="flex items-center gap-2 mb-4 border-b-2 border-black pb-2">
+                    <span className="text-2xl">⚡</span>
+                    <h3 className="font-black uppercase text-xl tracking-tight leading-6">LINK AKSES NANO BANANA PRO</h3>
+                </div>
+                
+                <ul className="space-y-3">
+                    {EXTERNAL_LINKS.map((link) => (
+                        <li key={link.name}>
+                            <a 
+                                href={link.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="block w-full bg-white border-2 border-black px-4 py-2 font-bold text-xs uppercase hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center justify-between group"
+                            >
+                                {link.name}
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                </svg>
+                            </a>
+                        </li>
+                    ))}
+                </ul>
+                
+                <div className="mt-6 text-[10px] font-mono font-bold text-center border-t-2 border-black pt-2 opacity-60">
+                    RECOMMENDED LINKS
                 </div>
             </div>
         </div>
@@ -429,10 +461,6 @@ const App: React.FC = () => {
           onDelete={() => handleDeleteItem(selectedItem.id)}
           isAdmin={isLoggedIn}
         />
-      )}
-
-      {showGenerator && (
-        <GeneratorModal onClose={() => setShowGenerator(false)} />
       )}
     </div>
   );
