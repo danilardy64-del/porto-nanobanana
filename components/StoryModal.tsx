@@ -7,9 +7,10 @@ interface StoryModalProps {
   onClose: () => void;
   onSave: (newStory: StoryResponse) => void;
   onDelete: () => void;
+  isAdmin: boolean;
 }
 
-export const StoryModal: React.FC<StoryModalProps> = ({ item, parsedStory, onClose, onSave, onDelete }) => {
+export const StoryModal: React.FC<StoryModalProps> = ({ item, parsedStory, onClose, onSave, onDelete, isAdmin }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editStory, setEditStory] = useState('');
@@ -94,7 +95,7 @@ export const StoryModal: React.FC<StoryModalProps> = ({ item, parsedStory, onClo
             className="w-full md:w-1/2 h-1/2 md:h-full bg-slate-100 border-b-4 md:border-b-0 md:border-r-4 border-black flex items-center justify-center relative p-8 select-none"
             onContextMenu={(e) => e.preventDefault()}
         >
-           <div className="absolute inset-0 bg-[linear-gradient(45deg,#0000000d_25%,transparent_25%,transparent_50%,#0000000d_50%,#0000000d_75%,transparent_75%,transparent)] bg-[length:24px_24px]"></div>
+           <div className="absolute inset-0 bg-[linear-gradient(45deg,#000_25%,transparent_25%,transparent_50%,#000_50%,#000_75%,transparent_75%,transparent)] bg-[length:24px_24px] opacity-5"></div>
            
            {item.imageData && (
              <div className="relative border-2 border-black bg-white p-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rotate-1 group">
@@ -247,17 +248,19 @@ export const StoryModal: React.FC<StoryModalProps> = ({ item, parsedStory, onClo
                                     </svg>
                                 </button>
 
-                                <button 
-                                    onClick={handleDeleteClick}
-                                    className={`px-4 py-3 font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all uppercase ${deleteConfirm ? 'bg-red-600 text-white' : 'bg-red-500 text-white'}`}
-                                    title="Delete Image"
-                                >
-                                    {deleteConfirm ? "CONFIRM?" : (
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    )}
-                                </button>
+                                {isAdmin && (
+                                    <button 
+                                        onClick={handleDeleteClick}
+                                        className={`px-4 py-3 font-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all uppercase ${deleteConfirm ? 'bg-red-600 text-white' : 'bg-red-500 text-white'}`}
+                                        title="Delete Image (Admin Only)"
+                                    >
+                                        {deleteConfirm ? "CONFIRM?" : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         )}
                     </>

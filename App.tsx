@@ -26,6 +26,7 @@ const App: React.FC = () => {
   const [showGenerator, setShowGenerator] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(1);
   const [totalVisits, setTotalVisits] = useState(0);
+  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
   
   // Auth State
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -107,63 +108,67 @@ const App: React.FC = () => {
     }
   };
 
-  // Core logic to process a single file upload
+  // Core logic to process a single file upload - Refactored to be Promise-based
   const processSlotUpload = async (id: number, file: File, openModal: boolean = false) => {
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = reader.result as string;
+    // 1. Read File to Base64
+    const base64String = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
       
-      // Update state to show image and loading status
+    // 2. Update state to show image and loading status
+    setItems(prev => prev.map(item => 
+      item.id === id 
+        ? { ...item, imageData: base64String, isLoading: true, error: null } 
+        : item
+    ));
+
+    if (openModal) {
+        setSelectedItem({ 
+            id, 
+            imageData: base64String, 
+            story: null, 
+            isLoading: true, 
+            error: null 
+        });
+    }
+
+    // 3. Call API
+    try {
+      const storyData = await generateStoryFromImage(base64String);
+      const storyJson = JSON.stringify(storyData);
+      
       setItems(prev => prev.map(item => 
         item.id === id 
-          ? { ...item, imageData: base64String, isLoading: true, error: null } 
+          ? { ...item, story: storyJson, isLoading: false } 
           : item
       ));
 
       if (openModal) {
-          setSelectedItem({ 
-              id, 
-              imageData: base64String, 
-              story: null, 
-              isLoading: true, 
-              error: null 
-          });
-      }
-
-      try {
-        const storyData = await generateStoryFromImage(base64String);
-        const storyJson = JSON.stringify(storyData);
-        
-        setItems(prev => prev.map(item => 
-          item.id === id 
-            ? { ...item, story: storyJson, isLoading: false } 
-            : item
-        ));
-
-        if (openModal) {
-             setSelectedItem(prev => 
-                prev && prev.id === id 
-                ? { ...prev, story: storyJson, isLoading: false } 
-                : prev
-            );
-        }
-
-      } catch (error: any) {
-        setItems(prev => prev.map(item => 
-          item.id === id 
-            ? { ...item, isLoading: false, error: error.message } 
-            : item
-        ));
-         if (openModal) {
             setSelectedItem(prev => 
-                prev && prev.id === id 
-                ? { ...prev, isLoading: false, error: error.message } 
-                : prev
-            );
-         }
+              prev && prev.id === id 
+              ? { ...prev, story: storyJson, isLoading: false } 
+              : prev
+          );
       }
-    };
-    reader.readAsDataURL(file);
+
+    } catch (error: any) {
+      const errorMsg = error.message || "Failed to analyze";
+      setItems(prev => prev.map(item => 
+        item.id === id 
+          ? { ...item, isLoading: false, error: errorMsg } 
+          : item
+      ));
+        if (openModal) {
+          setSelectedItem(prev => 
+              prev && prev.id === id 
+              ? { ...prev, isLoading: false, error: errorMsg } 
+              : prev
+          );
+        }
+    }
   };
 
   const handleUpload = useCallback((id: number, file: File) => {
@@ -176,7 +181,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleBulkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBulkChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files) as File[];
       const emptySlots = items.filter(i => !i.imageData);
@@ -186,12 +191,23 @@ const App: React.FC = () => {
         return;
       }
 
+      setIsProcessingBulk(true);
       const filesToProcess = files.slice(0, emptySlots.length);
       
-      filesToProcess.forEach((file, index) => {
-        const slotId = emptySlots[index].id;
-        processSlotUpload(slotId, file, false);
-      });
+      // Sequential processing with delay to respect rate limits
+      for (let i = 0; i < filesToProcess.length; i++) {
+          const file = filesToProcess[i];
+          const slotId = emptySlots[i].id;
+          
+          await processSlotUpload(slotId, file, false);
+          
+          // Add a 5-second delay between requests to avoid Rate Limit (429)
+          if (i < filesToProcess.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+      }
+
+      setIsProcessingBulk(false);
 
       if (files.length > emptySlots.length) {
          alert(`Uploaded ${emptySlots.length} images. ${files.length - emptySlots.length} images were skipped.`);
@@ -364,10 +380,11 @@ const App: React.FC = () => {
                     />
                     <button 
                     onClick={handleBulkClick}
-                    className="group relative inline-flex items-center justify-center px-6 py-3 bg-black text-white font-bold uppercase tracking-widest border-2 border-transparent hover:bg-white hover:text-black hover:border-black transition-all shadow-[4px_4px_0px_0px_rgba(150,150,150,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+                    disabled={isProcessingBulk}
+                    className={`group relative inline-flex items-center justify-center px-6 py-3 bg-black text-white font-bold uppercase tracking-widest border-2 border-transparent hover:bg-white hover:text-black hover:border-black transition-all shadow-[4px_4px_0px_0px_rgba(150,150,150,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] ${isProcessingBulk ? 'cursor-wait opacity-50' : ''}`}
                     >
                     <span className="mr-2 text-xl">+</span>
-                    Add Photos
+                    {isProcessingBulk ? 'Uploading Sequentially...' : 'Add Photos'}
                     </button>
 
                     <button 
@@ -410,6 +427,7 @@ const App: React.FC = () => {
           onClose={handleCloseModal}
           onSave={(newStory) => handleUpdateItem(selectedItem.id, newStory)}
           onDelete={() => handleDeleteItem(selectedItem.id)}
+          isAdmin={isLoggedIn}
         />
       )}
 

@@ -1,16 +1,33 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { StoryResponse } from "../types";
+
+// Helper function for Retry logic
+async function retryOperation<T>(operation: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+  try {
+    return await operation();
+  } catch (error: any) {
+    // Check for Rate Limit / Quota Exceeded (429) or Server Errors (500, 503)
+    const status = error?.status || error?.response?.status;
+    const isQuotaError = status === 429 || (error.message && error.message.includes("429")) || (error.message && error.message.includes("RESOURCE_EXHAUSTED"));
+    
+    if (retries > 0 && isQuotaError) {
+      console.warn(`Quota limit hit. Retrying in ${delay}ms... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryOperation(operation, retries - 1, delay * 2); // Exponential backoff
+    }
+    throw error;
+  }
+}
 
 /**
  * Generates an extremely detailed technical prompt based on the provided image.
  * Tailored for FaceID/ControlNet reconstruction workflows.
  */
 export const generateStoryFromImage = async (base64Image: string): Promise<StoryResponse> => {
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    // Remove header if present (data:image/jpeg;base64,)
-    const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+  const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 
+  const runAnalysis = async () => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const systemInstruction = `
       You are an expert Prompt Engineer for High-End AI Image Generators (Midjourney v6, Stable Diffusion XL, Flux).
       
@@ -52,7 +69,14 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
       },
       config: {
         systemInstruction: systemInstruction,
+        maxOutputTokens: 8192, // Increased max tokens to ensure JSON isn't cut off
         responseMimeType: "application/json",
+        safetySettings: [
+           { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+           { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+           { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+           { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        ],
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -64,6 +88,11 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
       },
     });
 
+    return response;
+  };
+
+  try {
+    const response = await retryOperation(runAnalysis);
     let jsonString = response.text || "{}";
 
     // CLEANUP: Remove Markdown code blocks if the model includes them despite instructions
@@ -79,16 +108,19 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
 
     } catch (parseError) {
         console.warn("JSON Parse failed, attempting fallback.", parseError);
-        // Fallback: If JSON fails, return the raw text as the story (better than erroring out)
         return {
             title: "GENERATED PROMPT (RAW)",
             story: response.text || "No text generated."
         };
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating detailed prompt:", error);
-    throw new Error("Failed to analyze image. Ensure API Key is valid and try again.");
+    // Propagate user friendly message
+    if (error.message && error.message.includes("RESOURCE_EXHAUSTED")) {
+        throw new Error("Quota exceeded (429). Please wait a moment and try again.");
+    }
+    throw new Error("Failed to analyze image. " + (error.message || "Unknown error"));
   }
 };
 
