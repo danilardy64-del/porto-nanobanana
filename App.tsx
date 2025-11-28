@@ -4,12 +4,13 @@ import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
 import { GeneratorModal } from './components/GeneratorModal';
 import { generateStoryFromImage } from './services/geminiService';
+import { savePortfolioToDB, loadPortfolioFromDB } from './utils/storage';
 
 const TOTAL_SLOTS = 50;
 const OWNER_PASSWORD = "@Hilo123";
 
 const App: React.FC = () => {
-  // Initialize 50 empty slots
+  // Initialize 50 empty slots initially
   const [items, setItems] = useState<PortfolioItem[]>(() => 
     Array.from({ length: TOTAL_SLOTS }, (_, i) => ({
       id: i + 1,
@@ -20,6 +21,7 @@ const App: React.FC = () => {
     }))
   );
 
+  const [isLoaded, setIsLoaded] = useState(false);
   const [selectedItem, setSelectedItem] = useState<PortfolioItem | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(1);
@@ -32,14 +34,46 @@ const App: React.FC = () => {
 
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
+  // 1. Load Data from IndexedDB on Mount
+  useEffect(() => {
+    const initData = async () => {
+        const storedItems = await loadPortfolioFromDB();
+        if (storedItems && storedItems.length > 0) {
+            // Merge stored items with default structure to ensure 50 slots
+            const mergedItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
+                const found = storedItems.find(item => item.id === (i + 1));
+                return found || {
+                    id: i + 1,
+                    imageData: null,
+                    story: null,
+                    isLoading: false,
+                    error: null
+                };
+            });
+            setItems(mergedItems);
+        }
+        setIsLoaded(true);
+    };
+    initData();
+  }, []);
+
+  // 2. Save Data to IndexedDB whenever items change
+  useEffect(() => {
+    if (isLoaded) {
+        // Debounce slightly or just save (IDB is async so it's relatively non-blocking)
+        const timeout = setTimeout(() => {
+            savePortfolioToDB(items);
+        }, 500);
+        return () => clearTimeout(timeout);
+    }
+  }, [items, isLoaded]);
+
   // Fake Analytics Logic
   useEffect(() => {
-    // Randomize online users between 12 and 85
     const interval = setInterval(() => {
         setOnlineUsers(Math.floor(Math.random() * (85 - 12 + 1) + 12));
     }, 5000);
 
-    // Load/Set total visits
     const visits = localStorage.getItem('kilau_visits') || "1024";
     const newVisits = parseInt(visits) + 1;
     localStorage.setItem('kilau_visits', newVisits.toString());
@@ -73,7 +107,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Core logic to process a single file upload for a specific slot
+  // Core logic to process a single file upload
   const processSlotUpload = async (id: number, file: File, openModal: boolean = false) => {
     const reader = new FileReader();
     reader.onloadend = async () => {
@@ -86,9 +120,7 @@ const App: React.FC = () => {
           : item
       ));
 
-      // Open modal if requested (single upload mode)
       if (openModal) {
-          // Construct temporary item state for immediate modal feedback
           setSelectedItem({ 
               id, 
               imageData: base64String, 
@@ -99,18 +131,15 @@ const App: React.FC = () => {
       }
 
       try {
-        // Call Gemini API
         const storyData = await generateStoryFromImage(base64String);
         const storyJson = JSON.stringify(storyData);
         
-        // Update state with result
         setItems(prev => prev.map(item => 
           item.id === id 
             ? { ...item, story: storyJson, isLoading: false } 
             : item
         ));
 
-        // Update modal if it's open for this item
         if (openModal) {
              setSelectedItem(prev => 
                 prev && prev.id === id 
@@ -159,23 +188,18 @@ const App: React.FC = () => {
 
       const filesToProcess = files.slice(0, emptySlots.length);
       
-      // Process each file into an available empty slot
       filesToProcess.forEach((file, index) => {
         const slotId = emptySlots[index].id;
-        processSlotUpload(slotId, file, false); // false = don't open modal
+        processSlotUpload(slotId, file, false);
       });
 
-      // Alert if some files were skipped
       if (files.length > emptySlots.length) {
-         alert(`Uploaded ${emptySlots.length} images. ${files.length - emptySlots.length} images were skipped because there weren't enough empty slots.`);
+         alert(`Uploaded ${emptySlots.length} images. ${files.length - emptySlots.length} images were skipped.`);
       }
-
-      // Reset input
       e.target.value = '';
     }
   };
 
-  // Handle manual update of the prompt/story from the modal
   const handleUpdateItem = (id: number, newStoryData: StoryResponse) => {
     const jsonString = JSON.stringify(newStoryData);
     
@@ -192,7 +216,6 @@ const App: React.FC = () => {
     );
   };
 
-  // Handle deletion of an item
   const handleDeleteItem = (id: number) => {
     setItems(prev => prev.map(item => 
       item.id === id 
@@ -210,7 +233,6 @@ const App: React.FC = () => {
     setSelectedItem(null);
   };
 
-  // Parse the stored JSON story string safely
   const getParsedStory = (jsonString: string | null): StoryResponse | null => {
       if (!jsonString) return null;
       try {
@@ -242,7 +264,6 @@ const App: React.FC = () => {
                    <span className="font-bold text-sm tracking-wider uppercase">PORTOFOLIO FROM KILAU AI</span>
                </div>
                
-               {/* Mobile Analytics (Visible only on mobile) */}
                <div className="flex lg:hidden items-center gap-2 text-[10px] font-bold">
                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                    {onlineUsers} ON
@@ -296,7 +317,7 @@ const App: React.FC = () => {
                </div>
            </div>
 
-           {/* Analytics - Right (Hidden on small mobile, visible on desktop) */}
+           {/* Analytics - Right */}
           <div className="hidden lg:flex items-center gap-4">
              <div className="flex items-center gap-2 text-xs font-bold border-2 border-black px-3 py-1 bg-slate-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
@@ -311,8 +332,6 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-12 relative z-10">
-        
-        {/* Centered Hero / Instruction Box */}
         <div className="mb-16 max-w-3xl mx-auto text-center">
             <div className="bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transform -rotate-1 transition-transform hover:rotate-0">
                 <div className="inline-block bg-yellow-300 border-2 border-black px-4 py-1 mb-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
@@ -335,7 +354,6 @@ const App: React.FC = () => {
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    {/* Bulk Upload Button */}
                     <input 
                     type="file" 
                     ref={bulkInputRef}
@@ -377,7 +395,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="relative z-10 border-t-4 border-black bg-white py-12 mt-12">
         <div className="container mx-auto px-4 text-center">
             <p className="mt-6 text-slate-500 text-xs font-mono">
@@ -386,7 +403,6 @@ const App: React.FC = () => {
         </div>
       </footer>
 
-      {/* Modal for Prompt Details */}
       {selectedItem && (
         <StoryModal 
           item={selectedItem} 
@@ -397,7 +413,6 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Generator Modal */}
       {showGenerator && (
         <GeneratorModal onClose={() => setShowGenerator(false)} />
       )}

@@ -8,7 +8,8 @@ import { StoryResponse } from "../types";
 export const generateStoryFromImage = async (base64Image: string): Promise<StoryResponse> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const cleanBase64 = base64Image.split(',')[1] || base64Image;
+    // Remove header if present (data:image/jpeg;base64,)
+    const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 
     const systemInstruction = `
       You are an expert Prompt Engineer for High-End AI Image Generators (Midjourney v6, Stable Diffusion XL, Flux).
@@ -30,7 +31,8 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
          - **Environment:** Background details, architecture, props, time of day.
          - **Technical keywords:** 8k, photorealistic, octane render, ray tracing, etc.
       
-      Output strictly JSON.
+      OUTPUT FORMAT:
+      Return strictly JSON with 'title' and 'story' keys. Do NOT wrap in markdown code blocks.
     `;
 
     const response = await ai.models.generateContent({
@@ -44,7 +46,7 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
             },
           },
           {
-            text: "Deconstruct this image into a massive, highly detailed JSON prompt as instructed."
+            text: "Deconstruct this image into a massive, highly detailed JSON prompt."
           },
         ],
       },
@@ -62,17 +64,31 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
       },
     });
 
-    const result = JSON.parse(response.text || "{}");
-    
-    if (!result.title || !result.story) {
-        throw new Error("Incomplete response from AI");
-    }
+    let jsonString = response.text || "{}";
 
-    return result as StoryResponse;
+    // CLEANUP: Remove Markdown code blocks if the model includes them despite instructions
+    jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    try {
+        const result = JSON.parse(jsonString);
+        
+        if (!result.title || !result.story) {
+            throw new Error("Incomplete JSON structure");
+        }
+        return result as StoryResponse;
+
+    } catch (parseError) {
+        console.warn("JSON Parse failed, attempting fallback.", parseError);
+        // Fallback: If JSON fails, return the raw text as the story (better than erroring out)
+        return {
+            title: "GENERATED PROMPT (RAW)",
+            story: response.text || "No text generated."
+        };
+    }
 
   } catch (error) {
     console.error("Error generating detailed prompt:", error);
-    throw new Error("Failed to analyze image. Please try again.");
+    throw new Error("Failed to analyze image. Ensure API Key is valid and try again.");
   }
 };
 
@@ -88,9 +104,9 @@ export const generateImageWithGemini = async (
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const parts: any[] = [{ text: prompt }];
 
-    // Add reference image if provided (for image-to-image or style transfer context)
+    // Add reference image if provided
     if (referenceImage) {
-      const cleanRef = referenceImage.split(',')[1] || referenceImage;
+      const cleanRef = referenceImage.includes(',') ? referenceImage.split(',')[1] : referenceImage;
       parts.push({
         inlineData: {
           mimeType: "image/jpeg",
@@ -100,7 +116,7 @@ export const generateImageWithGemini = async (
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview', // Using Pro for high quality generation
+      model: 'gemini-3-pro-image-preview',
       contents: { parts },
       config: {
         imageConfig: {
