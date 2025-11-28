@@ -5,9 +5,10 @@ interface PortfolioCardProps {
   item: PortfolioItem;
   onUpload: (id: number, file: File) => void;
   onClick: (item: PortfolioItem) => void;
+  onAuthCheck: () => boolean; // Added auth check prop
 }
 
-export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, onClick }) => {
+export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, onClick, onAuthCheck }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -20,7 +21,10 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, on
     if (item.imageData) {
       onClick(item);
     } else {
-      fileInputRef.current?.click();
+      // Security Check before opening file dialog
+      if (onAuthCheck()) {
+        fileInputRef.current?.click();
+      }
     }
   };
 
@@ -80,7 +84,7 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, on
              <span className="text-2xl font-bold">+</span>
           </div>
           <span className="text-sm font-bold uppercase tracking-wide">Upload</span>
-          <span className="text-[10px] bg-black text-white px-1 mt-1 font-mono">EMPTY SLOT</span>
+          <span className="text-[10px] bg-black text-white px-1 mt-1 font-mono">OWNER ONLY</span>
         </div>
       )}
     </div>
