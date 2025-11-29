@@ -5,7 +5,7 @@ interface PortfolioCardProps {
   item: PortfolioItem;
   onUpload: (id: number, file: File) => void;
   onClick: (item: PortfolioItem) => void;
-  onAuthCheck: () => boolean; // Added auth check prop
+  onAuthCheck: () => boolean; 
 }
 
 export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, onClick, onAuthCheck }) => {
@@ -21,7 +21,6 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, on
     if (item.imageData) {
       onClick(item);
     } else {
-      // STRICT Security Check before opening file dialog
       if (onAuthCheck()) {
         fileInputRef.current?.click();
       }
@@ -45,10 +44,9 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, on
         className="hidden"
         accept="image/*"
         onChange={handleFileChange}
-        onClick={(e) => e.stopPropagation()} // Prevent double trigger
+        onClick={(e) => e.stopPropagation()} 
       />
 
-      {/* Slot Number Tag - Industrial Style */}
       <div className="absolute top-0 left-0 z-20 bg-black text-white text-xs font-bold px-2 py-1 border-r-2 border-b-2 border-white">
         #{item.id.toString().padStart(2, '0')}
       </div>
@@ -59,10 +57,8 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, on
              <img 
                src={item.imageData} 
                alt={`Slot ${item.id}`} 
-               // REVISI: Default berwarna (grayscale-0), Hover jadi abu-abu (grayscale)
                className="w-full h-full object-cover grayscale-0 group-hover:grayscale transition-all duration-300"
              />
-             {/* Halftone pattern overlay effect */}
              <div className="absolute inset-0 bg-[radial-gradient(circle,#000_1px,transparent_1px)] bg-[size:4px_4px] opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none"></div>
           </div>
           
@@ -71,13 +67,6 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, on
               {item.isLoading ? "PROCESSING..." : "KLIK UNTUK PROMPTNYA"}
             </p>
           </div>
-
-          {item.isLoading && (
-            <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center border-2 border-black m-2">
-               <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-               <span className="mt-2 text-xs font-bold font-mono">LOADING</span>
-            </div>
-          )}
         </>
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center text-black group-hover:text-black transition-colors p-4 text-center">

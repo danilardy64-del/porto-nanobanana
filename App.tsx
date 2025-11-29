@@ -2,9 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { PortfolioItem, StoryResponse } from './types';
 import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
-// Removed geminiService import as it is no longer used for uploads
-import { savePortfolioToDB, loadPortfolioFromDB } from './utils/storage';
-import { INITIAL_DATA } from './data/initialData';
+import { subscribeToPortfolio, savePortfolioToCloud } from './utils/storage';
 
 const TOTAL_SLOTS = 50;
 const OWNER_PASSWORD = "@Hilo123";
@@ -30,6 +28,7 @@ const App: React.FC = () => {
   );
 
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false); // New state for visual feedback
   const [selectedItem, setSelectedItem] = useState<PortfolioItem | null>(null);
   const [onlineUsers, setOnlineUsers] = useState(1);
   const [totalVisits, setTotalVisits] = useState(0);
@@ -42,51 +41,30 @@ const App: React.FC = () => {
 
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Load Data from IndexedDB OR Initial Static Data (for Netlify visitors)
+  // 1. FIREBASE SYNC: Connect to Cloud Database on Mount
   useEffect(() => {
-    const initData = async () => {
-        // First, try loading from local IndexedDB (User's browser cache)
-        const storedItems = await loadPortfolioFromDB();
-        
-        let sourceData: PortfolioItem[] = [];
-
-        if (storedItems && storedItems.length > 0) {
-            // Priority 1: User has local edits/cache
-            sourceData = storedItems;
-        } else if (INITIAL_DATA && INITIAL_DATA.length > 0) {
-            // Priority 2: No local cache, load "Baked-in" data from deployment
-            // Check if INITIAL_DATA is valid
-            sourceData = INITIAL_DATA;
+    // This function runs automatically whenever data changes in the cloud
+    const unsubscribe = subscribeToPortfolio((cloudData) => {
+        if (cloudData && cloudData.length > 0) {
+            // Merge cloud data with strict 50 slots structure
+            const mergedItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
+                const found = cloudData.find((item: any) => item.id === (i + 1));
+                return found || {
+                    id: i + 1,
+                    imageData: null,
+                    story: null,
+                    isLoading: false,
+                    error: null
+                };
+            });
+            setItems(mergedItems);
         }
-
-        // Merge source data with default structure to ensure 50 slots
-        const mergedItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
-            const found = sourceData.find(item => item.id === (i + 1));
-            return found || {
-                id: i + 1,
-                imageData: null,
-                story: null,
-                isLoading: false,
-                error: null
-            };
-        });
-        
-        setItems(mergedItems);
         setIsLoaded(true);
-    };
-    initData();
-  }, []);
+    });
 
-  // 2. Save Data to IndexedDB whenever items change
-  useEffect(() => {
-    if (isLoaded) {
-        // Debounce slightly or just save (IDB is async so it's relatively non-blocking)
-        const timeout = setTimeout(() => {
-            savePortfolioToDB(items);
-        }, 500);
-        return () => clearTimeout(timeout);
-    }
-  }, [items, isLoaded]);
+    // Cleanup connection when app closes
+    return () => unsubscribe();
+  }, []);
 
   // Fake Analytics Logic
   useEffect(() => {
@@ -127,25 +105,21 @@ const App: React.FC = () => {
     }
   };
 
-  // Export Data Logic
-  const handleExportData = () => {
+  // 2. SAVE TO CLOUD LOGIC (Replaces Export)
+  const handleSaveToCloud = async () => {
     if (!handleAuthCheck()) return;
-
-    // Filter items to only save those with data to save file size
-    const filledItems = items.filter(item => item.imageData !== null);
     
-    const fileContent = `import { PortfolioItem } from "../types";\n\nexport const INITIAL_DATA: PortfolioItem[] = ${JSON.stringify(filledItems, null, 2)};`;
-    
-    const blob = new Blob([fileContent], { type: "text/typescript" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "initialData.ts";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    alert(`✅ DATA BERHASIL DISIMPAN (DIDOWNLOAD)!\n\nAGAR PERUBAHAN INI MUNCUL DI NETLIFY (TERKUNCI):\n\n1. Buka folder codingan project ini di komputer Anda.\n2. Cari folder "src/data/".\n3. Hapus file "initialData.ts" yang lama.\n4. Paste file "initialData.ts" yang baru saja didownload ke folder tersebut.\n5. Upload ulang (Push) codingan ke GitHub/Netlify.\n\nSetelah deploy selesai, foto-foto ini akan permanen untuk semua pengunjung.`);
+    if (window.confirm("Simpan perubahan ke Cloud agar tampil di Netlify?")) {
+        setIsSyncing(true);
+        try {
+            await savePortfolioToCloud(items);
+            alert("✅ SUKSES! Data tersimpan di Cloud.\nPengunjung di Netlify akan melihat foto-foto ini secara otomatis.");
+        } catch (error) {
+            alert("❌ Gagal menyimpan. Cek koneksi internet atau config Firebase Anda.");
+        } finally {
+            setIsSyncing(false);
+        }
+    }
   };
 
   // DELETE ALL Logic
@@ -153,20 +127,21 @@ const App: React.FC = () => {
     if (!handleAuthCheck()) return;
 
     if (window.confirm("PERINGATAN BAHAYA: Apakah Anda yakin ingin menghapus SEMUA foto? Tindakan ini tidak dapat dibatalkan.")) {
-        setItems(prev => prev.map(item => ({
-            ...item,
+        const resetItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => ({
+            id: i + 1,
             imageData: null,
             story: null,
             isLoading: false,
             error: null
-        })));
-        setSelectedItem(null);
+        }));
+        setItems(resetItems);
+        // Optional: Auto save clear to cloud
+        // savePortfolioToCloud(resetItems); 
     }
   };
 
-  // Core logic to process a single file upload - CHANGED TO MANUAL ONLY
+  // Core logic to process a single file upload - MANUAL ONLY
   const processSlotUpload = async (id: number, file: File, openModal: boolean = false) => {
-    // 1. Read File to Base64
     const base64String = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -174,14 +149,12 @@ const App: React.FC = () => {
         reader.readAsDataURL(file);
     });
       
-    // 2. Define Default Manual Data (No AI)
     const defaultManualData: StoryResponse = {
         title: "JUDUL BARU",
         story: "Tulis deskripsi prompt manual disini..."
     };
     const storyJson = JSON.stringify(defaultManualData);
 
-    // 3. Update state immediately
     setItems(prev => prev.map(item => 
       item.id === id 
         ? { ...item, imageData: base64String, story: storyJson, isLoading: false, error: null } 
@@ -222,7 +195,6 @@ const App: React.FC = () => {
       setIsProcessingBulk(true);
       const filesToProcess = files.slice(0, emptySlots.length);
       
-      // Process sequentially but fast (no delay needed for manual mode)
       for (let i = 0; i < filesToProcess.length; i++) {
           const file = filesToProcess[i];
           const slotId = emptySlots[i].id;
@@ -230,10 +202,6 @@ const App: React.FC = () => {
       }
 
       setIsProcessingBulk(false);
-
-      if (files.length > emptySlots.length) {
-         alert(`Uploaded ${emptySlots.length} images. ${files.length - emptySlots.length} images were skipped.`);
-      }
       e.target.value = '';
     }
   };
@@ -282,7 +250,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-yellow-300 selection:text-black">
-      {/* Background Grid Pattern */}
       <div className="fixed inset-0 z-0 opacity-40 pointer-events-none" 
            style={{ 
              backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', 
@@ -290,7 +257,6 @@ const App: React.FC = () => {
            }}>
       </div>
       
-      {/* Minimal Sticky Header */}
       <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-sm border-b-4 border-black">
         <div className="container mx-auto px-4 py-3 flex flex-col lg:flex-row items-center justify-between gap-4">
            {/* Logo - Left */}
@@ -344,8 +310,7 @@ const App: React.FC = () => {
                               ADMIN
                           </span>
                           
-                          {/* DELETE ALL BUTTON */}
-                           <button 
+                          <button 
                             onClick={handleDeleteAll}
                             className="text-[10px] font-bold bg-red-600 text-white px-2 py-1 border border-black hover:bg-red-700 transition-all flex items-center gap-1"
                             title="Reset all images"
@@ -353,16 +318,14 @@ const App: React.FC = () => {
                              RESET
                           </button>
 
-                          {/* SAVE PERUBAHAN BUTTON */}
+                          {/* CLOUD SYNC BUTTON */}
                           <button 
-                            onClick={handleExportData}
-                            className="text-[10px] font-bold bg-blue-500 text-white px-2 py-1 border border-black hover:bg-blue-600 transition-all flex items-center gap-1 animate-bounce"
-                            title="Download file data untuk mengunci perubahan di Netlify"
+                            onClick={handleSaveToCloud}
+                            disabled={isSyncing}
+                            className={`text-[10px] font-bold text-white px-2 py-1 border border-black hover:bg-blue-600 transition-all flex items-center gap-1 ${isSyncing ? 'bg-slate-400 cursor-wait' : 'bg-blue-500 animate-pulse'}`}
+                            title="Upload data ke Firebase agar muncul di Netlify"
                           >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                             </svg>
-                             SAVE PERUBAHAN (LOCK)
+                             {isSyncing ? 'UPLOADING...' : '☁️ SAVE TO CLOUD (LOCK)'}
                           </button>
 
                           <div className="h-4 w-0.5 bg-slate-300"></div>
@@ -390,13 +353,8 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-12 relative z-10">
-        
-        {/* HERO SECTION - SPLIT LAYOUT */}
         <div className="mb-16 max-w-6xl mx-auto flex flex-col lg:flex-row gap-8 items-start">
-            
-            {/* Title Box */}
             <div className="flex-1 w-full bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-center">
                 <div className="inline-block bg-yellow-300 border-2 border-black px-4 py-1 mb-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
                     <h3 className="text-sm font-black uppercase tracking-widest">Digital Portfolio</h3>
@@ -437,7 +395,6 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-            {/* Side Links Box */}
             <div className="w-full lg:w-72 bg-yellow-300 border-4 border-black p-6 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                 <div className="flex items-center gap-2 mb-4 border-b-2 border-black pb-2">
                     <span className="text-2xl">⚡</span>
