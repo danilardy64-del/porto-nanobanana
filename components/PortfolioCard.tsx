@@ -21,7 +21,7 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, on
     if (item.imageData) {
       onClick(item);
     } else {
-      // Security Check before opening file dialog
+      // STRICT Security Check before opening file dialog
       if (onAuthCheck()) {
         fileInputRef.current?.click();
       }

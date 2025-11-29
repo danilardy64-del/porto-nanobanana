@@ -187,16 +187,18 @@ export const StoryModal: React.FC<StoryModalProps> = ({ item, parsedStory, onClo
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-500 font-mono">
                          <p>[NO PROMPT DATA]</p>
-                         <button 
-                            onClick={() => {
-                                setIsEditing(true);
-                                setEditTitle("New Title");
-                                setEditStory("Write your prompt here...");
-                            }}
-                            className="mt-4 text-xs underline hover:text-black"
-                         >
-                            Create Manually
-                         </button>
+                         {isAdmin && (
+                            <button 
+                                onClick={() => {
+                                    setIsEditing(true);
+                                    setEditTitle("New Title");
+                                    setEditStory("Write your prompt here...");
+                                }}
+                                className="mt-4 text-xs underline hover:text-black"
+                            >
+                                Create Manually
+                            </button>
+                         )}
                     </div>
                 )}
             </div>

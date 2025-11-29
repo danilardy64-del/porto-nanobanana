@@ -145,7 +145,7 @@ const App: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     
-    alert("File 'initialData.ts' berhasil didownload!\n\nINSTRUKSI DEPLOY:\n1. Buka folder project Anda.\n2. Cari folder 'src/data/'.\n3. Ganti file 'initialData.ts' yang lama dengan file yang baru saja didownload.\n4. Push ke GitHub/Deploy ke Netlify.");
+    alert(`✅ DATA BERHASIL DISIMPAN (DIDOWNLOAD)!\n\nAGAR PERUBAHAN INI MUNCUL DI NETLIFY (TERKUNCI):\n\n1. Buka folder codingan project ini di komputer Anda.\n2. Cari folder "src/data/".\n3. Hapus file "initialData.ts" yang lama.\n4. Paste file "initialData.ts" yang baru saja didownload ke folder tersebut.\n5. Upload ulang (Push) codingan ke GitHub/Netlify.\n\nSetelah deploy selesai, foto-foto ini akan permanen untuk semua pengunjung.`);
   };
 
   // DELETE ALL Logic
@@ -350,19 +350,19 @@ const App: React.FC = () => {
                             className="text-[10px] font-bold bg-red-600 text-white px-2 py-1 border border-black hover:bg-red-700 transition-all flex items-center gap-1"
                             title="Reset all images"
                           >
-                             RESET ALL
+                             RESET
                           </button>
 
-                          {/* NEW EXPORT BUTTON FOR ADMIN */}
+                          {/* SAVE PERUBAHAN BUTTON */}
                           <button 
                             onClick={handleExportData}
-                            className="text-[10px] font-bold bg-blue-500 text-white px-2 py-1 border border-black hover:bg-blue-600 transition-all flex items-center gap-1"
-                            title="Download data to deploy to Netlify"
+                            className="text-[10px] font-bold bg-blue-500 text-white px-2 py-1 border border-black hover:bg-blue-600 transition-all flex items-center gap-1 animate-bounce"
+                            title="Download file data untuk mengunci perubahan di Netlify"
                           >
                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                              </svg>
-                             DEPLOY DATA
+                             SAVE PERUBAHAN (LOCK)
                           </button>
 
                           <div className="h-4 w-0.5 bg-slate-300"></div>
