@@ -148,6 +148,22 @@ const App: React.FC = () => {
     alert("File 'initialData.ts' berhasil didownload!\n\nINSTRUKSI DEPLOY:\n1. Buka folder project Anda.\n2. Cari folder 'src/data/'.\n3. Ganti file 'initialData.ts' yang lama dengan file yang baru saja didownload.\n4. Push ke GitHub/Deploy ke Netlify.");
   };
 
+  // DELETE ALL Logic
+  const handleDeleteAll = () => {
+    if (!handleAuthCheck()) return;
+
+    if (window.confirm("PERINGATAN BAHAYA: Apakah Anda yakin ingin menghapus SEMUA foto? Tindakan ini tidak dapat dibatalkan.")) {
+        setItems(prev => prev.map(item => ({
+            ...item,
+            imageData: null,
+            story: null,
+            isLoading: false,
+            error: null
+        })));
+        setSelectedItem(null);
+    }
+  };
+
   // Core logic to process a single file upload - CHANGED TO MANUAL ONLY
   const processSlotUpload = async (id: number, file: File, openModal: boolean = false) => {
     // 1. Read File to Base64
@@ -325,9 +341,18 @@ const App: React.FC = () => {
                       <div className="flex items-center gap-4 px-2 py-0.5">
                           <span className="text-xs font-black text-black uppercase tracking-tight flex items-center gap-2">
                               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse border border-black"></span>
-                              ADMIN ACCESS UNLOCKED
+                              ADMIN
                           </span>
                           
+                          {/* DELETE ALL BUTTON */}
+                           <button 
+                            onClick={handleDeleteAll}
+                            className="text-[10px] font-bold bg-red-600 text-white px-2 py-1 border border-black hover:bg-red-700 transition-all flex items-center gap-1"
+                            title="Reset all images"
+                          >
+                             RESET ALL
+                          </button>
+
                           {/* NEW EXPORT BUTTON FOR ADMIN */}
                           <button 
                             onClick={handleExportData}

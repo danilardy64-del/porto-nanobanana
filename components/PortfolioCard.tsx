@@ -59,10 +59,11 @@ export const PortfolioCard: React.FC<PortfolioCardProps> = ({ item, onUpload, on
              <img 
                src={item.imageData} 
                alt={`Slot ${item.id}`} 
-               className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-300"
+               // REVISI: Default berwarna (grayscale-0), Hover jadi abu-abu (grayscale)
+               className="w-full h-full object-cover grayscale-0 group-hover:grayscale transition-all duration-300"
              />
              {/* Halftone pattern overlay effect */}
-             <div className="absolute inset-0 bg-[radial-gradient(circle,#000_1px,transparent_1px)] bg-[size:4px_4px] opacity-10 group-hover:opacity-0 transition-opacity pointer-events-none"></div>
+             <div className="absolute inset-0 bg-[radial-gradient(circle,#000_1px,transparent_1px)] bg-[size:4px_4px] opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none"></div>
           </div>
           
           <div className="absolute bottom-0 left-0 right-0 bg-white border-t-2 border-black p-2 transform translate-y-full group-hover:translate-y-0 transition-transform duration-200">
