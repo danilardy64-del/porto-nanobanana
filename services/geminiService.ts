@@ -27,8 +27,14 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 
   const runAnalysis = async () => {
-    // Use process.env.API_KEY exclusively
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Dengan setting di vite.config.ts, process.env.API_KEY sekarang berisi kunci asli Anda
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey) {
+        throw new Error("API Key is missing in the build configuration.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
     
     const systemInstruction = `
       You are an expert Prompt Engineer for High-End AI Image Generators (Midjourney v6, Stable Diffusion XL, Flux).
@@ -135,8 +141,10 @@ export const generateImageWithGemini = async (
   referenceImage: string | null
 ): Promise<string> => {
   try {
-    // Use process.env.API_KEY exclusively
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) throw new Error("API Key missing");
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
     const parts: any[] = [{ text: prompt }];
 
     // Add reference image if provided

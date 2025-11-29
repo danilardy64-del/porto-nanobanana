@@ -17,7 +17,6 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // Define state as a class property to satisfy TypeScript type checking
   public state: ErrorBoundaryState = {
     hasError: false,
     error: null
