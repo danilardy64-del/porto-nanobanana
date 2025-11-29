@@ -7,7 +7,7 @@ export default defineConfig({
   define: {
     // INI BAGIAN PENTING:
     // Kita memaksa Vite untuk mengganti 'process.env.API_KEY' di dalam kodingan
-    // menjadi string kunci API Anda yang sebenarnya.
-    'process.env.API_KEY': JSON.stringify("AIzaSyApXH_2TL8e1fFsCwzW0lfu22GGodr7O6A"),
+    // menjadi string kunci API baru yang Anda berikan.
+    'process.env.API_KEY': JSON.stringify("AIzaSyD16HjE2Cg70oHx-iLwYPb3UutzvDJvLx8"),
   }
 })

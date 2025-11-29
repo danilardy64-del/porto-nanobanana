@@ -4,7 +4,6 @@ import { PortfolioItem, StoryResponse } from './types';
 import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
 import { subscribeToPortfolio, savePortfolioToCloud } from './utils/storage';
-import { generateStoryFromImage } from './services/geminiService';
 
 const TOTAL_SLOTS = 50;
 const OWNER_PASSWORD = "@Hilo123";
@@ -141,7 +140,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Logic to process a single file upload - AUTO AI ANALYSIS
+  // Logic to process a single file upload - MANUAL MODE (No AI)
   const processSlotUpload = async (id: number, file: File, openModal: boolean = false) => {
     const base64String = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -150,71 +149,36 @@ const App: React.FC = () => {
         reader.readAsDataURL(file);
     });
 
-    // 1. Set Loading State
+    // Default Manual Data
+    const defaultStory: StoryResponse = {
+        title: "JUDUL BARU",
+        story: "Tulis deskripsi prompt manual disini..."
+    };
+    const storyJson = JSON.stringify(defaultStory);
+
     setItems(prev => prev.map(item => 
       item.id === id 
-        ? { ...item, imageData: base64String, isLoading: true, error: null } 
+        ? { ...item, imageData: base64String, story: storyJson, isLoading: false, error: null } 
         : item
     ));
 
-    // If opening modal immediately, show loading state there too
+    // Update modal if it's the selected item
     if (openModal) {
          setSelectedItem({ 
             id, 
             imageData: base64String, 
-            story: null, 
-            isLoading: true, 
+            story: storyJson, 
+            isLoading: false, 
             error: null 
         });
-    }
-
-    // 2. Call AI Service
-    try {
-        const generatedStory = await generateStoryFromImage(base64String);
-        const storyJson = JSON.stringify(generatedStory);
-
-        setItems(prev => prev.map(item => 
-          item.id === id 
-            ? { ...item, story: storyJson, isLoading: false } 
-            : item
-        ));
-
-        // Update modal if it's the selected item
-        if (openModal) {
-            setSelectedItem({ 
-                id, 
-                imageData: base64String, 
-                story: storyJson, 
-                isLoading: false, 
-                error: null 
-            });
-        } else {
-             // If modal is open for THIS item but we are processing in background (e.g. bulk), update it
-             setSelectedItem(prev => (prev && prev.id === id) ? { 
-                id, 
-                imageData: base64String, 
-                story: storyJson, 
-                isLoading: false, 
-                error: null 
-            } : prev);
-        }
-
-    } catch (error: any) {
-        console.error("AI Generation Error", error);
-        setItems(prev => prev.map(item => 
-          item.id === id 
-            ? { ...item, isLoading: false, error: error.message || "Failed to analyze" } 
-            : item
-        ));
-         if (openModal) {
-            setSelectedItem({ 
-                id, 
-                imageData: base64String, 
-                story: null, 
-                isLoading: false, 
-                error: error.message || "Failed to analyze"
-            });
-        }
+    } else {
+         setSelectedItem(prev => (prev && prev.id === id) ? { 
+            id, 
+            imageData: base64String, 
+            story: storyJson, 
+            isLoading: false, 
+            error: null 
+        } : prev);
     }
   };
 
@@ -241,13 +205,11 @@ const App: React.FC = () => {
       setIsProcessingBulk(true);
       const filesToProcess = files.slice(0, emptySlots.length);
       
-      // Process strictly sequentially to respect rate limits
+      // Process sequentially but fast (no delay needed for manual)
       for (let i = 0; i < filesToProcess.length; i++) {
           const file = filesToProcess[i];
           const slotId = emptySlots[i].id;
           await processSlotUpload(slotId, file, false);
-          // Small delay between requests to be nice to the API
-          await new Promise(r => setTimeout(r, 1000));
       }
 
       setIsProcessingBulk(false);
