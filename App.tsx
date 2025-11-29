@@ -3,9 +3,9 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { PortfolioItem, StoryResponse } from './types';
 import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
-import { FirebaseSetup } from './components/FirebaseSetup';
 import { subscribeToPortfolio, savePortfolioToCloud } from './utils/storage';
-import { isConfigured, resetFirebaseConfig } from './src/firebase';
+// We don't need isConfigured check anymore since it's hardcoded
+// import { isConfigured, resetFirebaseConfig } from './src/firebase'; 
 
 const TOTAL_SLOTS = 50;
 const OWNER_PASSWORD = "@Hilo123";
@@ -19,11 +19,7 @@ const EXTERNAL_LINKS = [
 ];
 
 const App: React.FC = () => {
-  // --- SYSTEM CHECK ---
-  if (!isConfigured) {
-      return <FirebaseSetup />;
-  }
-  // --------------------
+  // --- SYSTEM CHECK REMOVED: Config is hardcoded ---
 
   // Initialize 50 empty slots initially
   const [items, setItems] = useState<PortfolioItem[]>(() => 
@@ -342,11 +338,6 @@ const App: React.FC = () => {
                             className="text-[10px] font-bold text-red-500 hover:bg-red-500 hover:text-white px-2 py-0.5 transition-all"
                           >
                             LOGOUT
-                          </button>
-
-                          {/* RESET CONFIG BUTTON (Hidden feature for debugging) */}
-                          <button onClick={resetFirebaseConfig} className="text-[8px] text-slate-300 hover:text-red-500">
-                             ⚙️
                           </button>
                       </div>
                   )}
