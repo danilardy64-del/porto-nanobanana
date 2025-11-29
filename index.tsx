@@ -1,5 +1,5 @@
-import React, { Component, ReactNode, ErrorInfo } from 'react';
-import ReactDOM from 'react-dom/client';
+import React, { ReactNode, ErrorInfo } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App';
 
 const rootElement = document.getElementById('root');
@@ -16,8 +16,8 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
     hasError: false,
     error: null
   };
@@ -53,7 +53,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-const root = ReactDOM.createRoot(rootElement);
+const root = createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <ErrorBoundary>

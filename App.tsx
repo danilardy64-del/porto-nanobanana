@@ -426,20 +426,22 @@ const App: React.FC = () => {
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <input 
-                    type="file" 
-                    ref={bulkInputRef}
-                    onChange={handleBulkChange}
-                    multiple 
-                    accept="image/*"
-                    className="hidden"
+                      type="file" 
+                      ref={bulkInputRef}
+                      onChange={handleBulkChange}
+                      multiple 
+                      accept="image/*"
+                      className="hidden"
                     />
+                    
+                    {/* ADD PHOTO BUTTON */}
                     <button 
-                    onClick={handleBulkClick}
-                    disabled={isProcessingBulk}
-                    className={`group relative inline-flex items-center justify-center px-6 py-3 bg-black text-white font-bold uppercase tracking-widest border-2 border-transparent hover:bg-white hover:text-black hover:border-black transition-all shadow-[4px_4px_0px_0px_rgba(150,150,150,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] ${isProcessingBulk ? 'cursor-wait opacity-50' : ''}`}
+                      onClick={handleBulkClick}
+                      disabled={isProcessingBulk}
+                      className={`group relative inline-flex items-center justify-center px-6 py-3 bg-black text-white font-bold uppercase tracking-widest border-2 border-transparent hover:bg-white hover:text-black hover:border-black transition-all shadow-[4px_4px_0px_0px_rgba(150,150,150,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] ${isProcessingBulk ? 'cursor-wait opacity-50' : ''}`}
                     >
-                    <span className="mr-2 text-xl">+</span>
-                    {isProcessingBulk ? 'Processing...' : 'Add Photos'}
+                      <span className="mr-2 text-xl">+</span>
+                      {isProcessingBulk ? 'Processing...' : 'Add Photos'}
                     </button>
                 </div>
             </div>

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { StoryResponse } from "../types";
 
@@ -37,27 +38,13 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
     const ai = new GoogleGenAI({ apiKey: apiKey });
     
     const systemInstruction = `
-      You are an expert Prompt Engineer for High-End AI Image Generators (Midjourney v6, Stable Diffusion XL, Flux).
+      You are an expert Prompt Engineer for High-End AI Image Generators.
+      YOUR TASK: Analyze the input image and output a JSON object with 'title' and 'story'.
       
-      YOUR TASK: 
-      Analyze the input image and deconstruct it into an EXTREMELY DETAILED text prompt (target 1500-2000 characters).
+      'story': An EXTREMELY DETAILED technical prompt (1500+ chars) describing the subject's outfit, pose, lighting, and environment for FaceID reconstruction. Refer to the person as "[Subject]". Ignore the original face identity.
+      'title': A short, cool industrial title.
       
-      SCENARIO:
-      The user wants to recreate this EXACT image structure, outfit, and vibe, but will swap the face with their own using a FaceID adapter.
-      Therefore, you must describe the subject's body, outfit, pose, and environment with 100% accuracy, but refer to the person simply as "[Subject]".
-      
-      REQUIREMENTS:
-      1. IGNORE the original face's identity. Focus on the OUTFIT, POSE, and LIGHTING.
-      2. DO NOT use phrases like "similar to the image", "atmosphere like this". Write a standalone, objective description.
-      3. BREAKDOWN:
-         - **Subject & Outfit:** Texture of fabric, specific clothing items, fit, accessories, jewelry, hairstyle (excluding face).
-         - **Pose & Angle:** Exact camera angle (e.g., low-angle, dutch angle, from below), lens type (e.g., 35mm, 85mm portrait), depth of field.
-         - **Lighting:** Direction (key light, rim light), color temperature, shadows, volumetric fog, studio vs natural.
-         - **Environment:** Background details, architecture, props, time of day.
-         - **Technical keywords:** 8k, photorealistic, octane render, ray tracing, etc.
-      
-      OUTPUT FORMAT:
-      Return strictly JSON with 'title' and 'story' keys. Do NOT wrap in markdown code blocks.
+      IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting.
     `;
 
     const response = await ai.models.generateContent({
@@ -71,13 +58,13 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
             },
           },
           {
-            text: "Deconstruct this image into a massive, highly detailed JSON prompt."
+            text: "Output valid JSON with 'title' and 'story'."
           },
         ],
       },
       config: {
         systemInstruction: systemInstruction,
-        maxOutputTokens: 8192, // Increased max tokens to ensure JSON isn't cut off
+        maxOutputTokens: 8192,
         responseMimeType: "application/json",
         safetySettings: [
            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -85,14 +72,6 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         ],
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING, description: "A short, catchy, industrial-style title for this prompt setup." },
-            story: { type: Type.STRING, description: "The massive, 2000-character detailed prompt description." },
-          },
-          required: ["title", "story"],
-        },
       },
     });
 
@@ -103,37 +82,42 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
     const response = await retryOperation(runAnalysis);
     let jsonString = response.text || "{}";
 
-    // CLEANUP: Remove Markdown code blocks if the model includes them despite instructions
-    jsonString = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+    // CLEANUP: Robust cleaning of markdown
+    jsonString = jsonString.replace(/```json/gi, '').replace(/```/g, '').trim();
 
     try {
         const result = JSON.parse(jsonString);
         
-        if (!result.title || !result.story) {
-            throw new Error("Incomplete JSON structure");
-        }
-        return result as StoryResponse;
+        // Validation with Fallback
+        return {
+            title: result.title || "GENERATED PROMPT",
+            story: result.story || result.description || "Prompt generation incomplete, but image was analyzed."
+        };
 
     } catch (parseError) {
-        console.warn("JSON Parse failed, attempting fallback.", parseError);
+        console.warn("JSON Parse failed, using raw text fallback.", parseError);
+        // Fallback: If JSON fails, just put all text in story
         return {
-            title: "GENERATED PROMPT (RAW)",
-            story: response.text || "No text generated."
+            title: "ANALYSIS RESULT (RAW)",
+            story: response.text || "No description generated."
         };
     }
 
   } catch (error: any) {
     console.error("Error generating detailed prompt:", error);
-    // Propagate user friendly message
     if (error.message && error.message.includes("RESOURCE_EXHAUSTED")) {
-        throw new Error("Quota exceeded (429). Please wait a moment and try again.");
+        throw new Error("Quota exceeded. Please wait a moment.");
     }
-    throw new Error("Failed to analyze image. " + (error.message || "Unknown error"));
+    // Return a dummy object instead of throwing error to keep UI alive
+    return {
+        title: "ANALYSIS PENDING",
+        story: "System is busy. Please try editing this manually or wait a moment. Error: " + (error.message || "Unknown")
+    };
   }
 };
 
 /**
- * Generates an image using Gemini Pro Image model based on user prompt and optional reference.
+ * Generates an image using Gemini Flash Image model based on user prompt and optional reference.
  */
 export const generateImageWithGemini = async (
   prompt: string, 
@@ -159,12 +143,11 @@ export const generateImageWithGemini = async (
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-2.5-flash-image', 
       contents: { parts },
       config: {
         imageConfig: {
           aspectRatio: aspectRatio,
-          imageSize: "1K"
         }
       },
     });
@@ -178,8 +161,12 @@ export const generateImageWithGemini = async (
 
     throw new Error("No image data returned from API");
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating image:", error);
-    throw new Error("Failed to generate image. Try adjusting the prompt.");
+    const msg = error.message || "Unknown error";
+    if (msg.includes("403") || msg.includes("PERMISSION_DENIED")) {
+        throw new Error("Access Denied. Ensure your API Key supports image generation.");
+    }
+    throw new Error("Failed to generate image. " + msg);
   }
 };
