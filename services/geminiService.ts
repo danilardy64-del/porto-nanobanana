@@ -27,7 +27,9 @@ export const generateStoryFromImage = async (base64Image: string): Promise<Story
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 
   const runAnalysis = async () => {
+    // Use process.env.API_KEY exclusively
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const systemInstruction = `
       You are an expert Prompt Engineer for High-End AI Image Generators (Midjourney v6, Stable Diffusion XL, Flux).
       
@@ -133,6 +135,7 @@ export const generateImageWithGemini = async (
   referenceImage: string | null
 ): Promise<string> => {
   try {
+    // Use process.env.API_KEY exclusively
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const parts: any[] = [{ text: prompt }];
 
