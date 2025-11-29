@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { PortfolioItem, StoryResponse } from './types';
 import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
-import { generateStoryFromImage } from './services/geminiService';
+// Removed geminiService import as it is no longer used for uploads
 import { savePortfolioToDB, loadPortfolioFromDB } from './utils/storage';
 import { INITIAL_DATA } from './data/initialData';
 
@@ -148,7 +148,7 @@ const App: React.FC = () => {
     alert("File 'initialData.ts' berhasil didownload!\n\nINSTRUKSI DEPLOY:\n1. Buka folder project Anda.\n2. Cari folder 'src/data/'.\n3. Ganti file 'initialData.ts' yang lama dengan file yang baru saja didownload.\n4. Push ke GitHub/Deploy ke Netlify.");
   };
 
-  // Core logic to process a single file upload - Refactored to be Promise-based
+  // Core logic to process a single file upload - CHANGED TO MANUAL ONLY
   const processSlotUpload = async (id: number, file: File, openModal: boolean = false) => {
     // 1. Read File to Base64
     const base64String = await new Promise<string>((resolve, reject) => {
@@ -158,10 +158,17 @@ const App: React.FC = () => {
         reader.readAsDataURL(file);
     });
       
-    // 2. Update state to show image and loading status
+    // 2. Define Default Manual Data (No AI)
+    const defaultManualData: StoryResponse = {
+        title: "JUDUL BARU",
+        story: "Tulis deskripsi prompt manual disini..."
+    };
+    const storyJson = JSON.stringify(defaultManualData);
+
+    // 3. Update state immediately
     setItems(prev => prev.map(item => 
       item.id === id 
-        ? { ...item, imageData: base64String, isLoading: true, error: null } 
+        ? { ...item, imageData: base64String, story: storyJson, isLoading: false, error: null } 
         : item
     ));
 
@@ -169,45 +176,10 @@ const App: React.FC = () => {
         setSelectedItem({ 
             id, 
             imageData: base64String, 
-            story: null, 
-            isLoading: true, 
+            story: storyJson, 
+            isLoading: false, 
             error: null 
         });
-    }
-
-    // 3. Call API
-    try {
-      const storyData = await generateStoryFromImage(base64String);
-      const storyJson = JSON.stringify(storyData);
-      
-      setItems(prev => prev.map(item => 
-        item.id === id 
-          ? { ...item, story: storyJson, isLoading: false } 
-          : item
-      ));
-
-      if (openModal) {
-            setSelectedItem(prev => 
-              prev && prev.id === id 
-              ? { ...prev, story: storyJson, isLoading: false } 
-              : prev
-          );
-      }
-
-    } catch (error: any) {
-      const errorMsg = error.message || "Failed to analyze";
-      setItems(prev => prev.map(item => 
-        item.id === id 
-          ? { ...item, isLoading: false, error: errorMsg } 
-          : item
-      ));
-        if (openModal) {
-          setSelectedItem(prev => 
-              prev && prev.id === id 
-              ? { ...prev, isLoading: false, error: errorMsg } 
-              : prev
-          );
-        }
     }
   };
 
@@ -234,17 +206,11 @@ const App: React.FC = () => {
       setIsProcessingBulk(true);
       const filesToProcess = files.slice(0, emptySlots.length);
       
-      // Sequential processing with delay to respect rate limits
+      // Process sequentially but fast (no delay needed for manual mode)
       for (let i = 0; i < filesToProcess.length; i++) {
           const file = filesToProcess[i];
           const slotId = emptySlots[i].id;
-          
           await processSlotUpload(slotId, file, false);
-          
-          // Add a 5-second delay between requests to avoid Rate Limit (429)
-          if (i < filesToProcess.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 5000));
-          }
       }
 
       setIsProcessingBulk(false);
@@ -441,7 +407,7 @@ const App: React.FC = () => {
                     className={`group relative inline-flex items-center justify-center px-6 py-3 bg-black text-white font-bold uppercase tracking-widest border-2 border-transparent hover:bg-white hover:text-black hover:border-black transition-all shadow-[4px_4px_0px_0px_rgba(150,150,150,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] ${isProcessingBulk ? 'cursor-wait opacity-50' : ''}`}
                     >
                     <span className="mr-2 text-xl">+</span>
-                    {isProcessingBulk ? 'Uploading Sequentially...' : 'Add Photos'}
+                    {isProcessingBulk ? 'Processing...' : 'Add Photos'}
                     </button>
                 </div>
             </div>
