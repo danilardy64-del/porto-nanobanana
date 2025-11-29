@@ -1,8 +1,11 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { PortfolioItem, StoryResponse } from './types';
 import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
+import { FirebaseSetup } from './components/FirebaseSetup';
 import { subscribeToPortfolio, savePortfolioToCloud } from './utils/storage';
+import { isConfigured, resetFirebaseConfig } from './src/firebase';
 
 const TOTAL_SLOTS = 50;
 const OWNER_PASSWORD = "@Hilo123";
@@ -16,6 +19,12 @@ const EXTERNAL_LINKS = [
 ];
 
 const App: React.FC = () => {
+  // --- SYSTEM CHECK ---
+  if (!isConfigured) {
+      return <FirebaseSetup />;
+  }
+  // --------------------
+
   // Initialize 50 empty slots initially
   const [items, setItems] = useState<PortfolioItem[]>(() => 
     Array.from({ length: TOTAL_SLOTS }, (_, i) => ({
@@ -28,7 +37,7 @@ const App: React.FC = () => {
   );
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false); // New state for visual feedback
+  const [isSyncing, setIsSyncing] = useState(false); 
   const [selectedItem, setSelectedItem] = useState<PortfolioItem | null>(null);
   const [onlineUsers, setOnlineUsers] = useState(1);
   const [totalVisits, setTotalVisits] = useState(0);
@@ -105,7 +114,7 @@ const App: React.FC = () => {
     }
   };
 
-  // 2. SAVE TO CLOUD LOGIC (Replaces Export)
+  // 2. SAVE TO CLOUD LOGIC
   const handleSaveToCloud = async () => {
     if (!handleAuthCheck()) return;
     
@@ -115,7 +124,8 @@ const App: React.FC = () => {
             await savePortfolioToCloud(items);
             alert("✅ SUKSES! Data tersimpan di Cloud.\nPengunjung di Netlify akan melihat foto-foto ini secara otomatis.");
         } catch (error) {
-            alert("❌ Gagal menyimpan. Cek koneksi internet atau config Firebase Anda.");
+            console.error(error);
+            alert("❌ Gagal menyimpan. Cek koneksi internet.");
         } finally {
             setIsSyncing(false);
         }
@@ -135,12 +145,10 @@ const App: React.FC = () => {
             error: null
         }));
         setItems(resetItems);
-        // Optional: Auto save clear to cloud
-        // savePortfolioToCloud(resetItems); 
     }
   };
 
-  // Core logic to process a single file upload - MANUAL ONLY
+  // Logic to process a single file upload - MANUAL ONLY
   const processSlotUpload = async (id: number, file: File, openModal: boolean = false) => {
     const base64String = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -334,6 +342,11 @@ const App: React.FC = () => {
                             className="text-[10px] font-bold text-red-500 hover:bg-red-500 hover:text-white px-2 py-0.5 transition-all"
                           >
                             LOGOUT
+                          </button>
+
+                          {/* RESET CONFIG BUTTON (Hidden feature for debugging) */}
+                          <button onClick={resetFirebaseConfig} className="text-[8px] text-slate-300 hover:text-red-500">
+                             ⚙️
                           </button>
                       </div>
                   )}

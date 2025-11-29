@@ -1,22 +1,46 @@
+
 import { initializeApp } from "firebase/app";
-import { getDatabase } from "firebase/database";
+import { getDatabase, Database } from "firebase/database";
 
-// --- AREA INI YANG NANTI HARUS ANDA ISI ---
-// 1. Buka Firebase Console (Website)
-// 2. Copy config SDK
-// 3. Paste menimpa bagian di bawah ini:
+// Cek apakah ada config tersimpan di browser
+const savedConfig = localStorage.getItem('kilau_firebase_config');
 
-const firebaseConfig = {
-  apiKey: "PASTE_API_KEY_DISINI",
-  authDomain: "PASTE_AUTH_DOMAIN_DISINI",
-  projectId: "PASTE_PROJECT_ID_DISINI",
-  storageBucket: "PASTE_STORAGE_BUCKET_DISINI",
-  messagingSenderId: "PASTE_MESSAGING_SENDER_ID_DISINI",
-  appId: "PASTE_APP_ID_DISINI"
+let app;
+let db: Database | null = null;
+let isConfigured = false;
+
+if (savedConfig) {
+  try {
+    const config = JSON.parse(savedConfig);
+    app = initializeApp(config);
+    db = getDatabase(app);
+    isConfigured = true;
+  } catch (error) {
+    console.error("Config Firebase Error:", error);
+    localStorage.removeItem('kilau_firebase_config'); // Reset jika rusak
+  }
+}
+
+// Fungsi helper untuk menyimpan config dari UI
+export const saveFirebaseConfig = (configStr: string) => {
+  try {
+    // Validasi JSON sederhana
+    const parsed = JSON.parse(configStr);
+    if (!parsed.apiKey || !parsed.projectId) {
+        throw new Error("Config tidak valid (kurang apiKey atau projectId)");
+    }
+    localStorage.setItem('kilau_firebase_config', configStr);
+    window.location.reload(); // Reload agar config terbaca
+    return true;
+  } catch (e) {
+    alert("Format JSON Salah! Pastikan copy semua termasuk kurung kurawal { }");
+    return false;
+  }
 };
 
-// ------------------------------------------
+export const resetFirebaseConfig = () => {
+    localStorage.removeItem('kilau_firebase_config');
+    window.location.reload();
+};
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const db = getDatabase(app);
+export { db, isConfigured };
