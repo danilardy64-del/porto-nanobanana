@@ -4,6 +4,7 @@ import { PortfolioItem, StoryResponse } from './types';
 import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
 import { subscribeToPortfolio, savePortfolioToCloud } from './utils/storage';
+import { INITIAL_DATA } from './src/data/initialData'; // Load static data
 
 const TOTAL_SLOTS = 50;
 const OWNER_PASSWORD = "@Hilo123";
@@ -16,17 +17,79 @@ const EXTERNAL_LINKS = [
   { name: "SEAART AGENT", url: "https://www.seaart.ai/agent/d4fekqde878c73ebah70" },
 ];
 
+// Helper: Compress Image to target ~100-500KB
+const compressImage = async (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Resize logic: Max dimension 800px (Good balance for web viewing & speed)
+        const MAX_DIM = 800;
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height *= MAX_DIM / width;
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width *= MAX_DIM / height;
+            height = MAX_DIM;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            // Fill white background (handling transparent PNGs converting to JPEG)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Compress to JPEG with 0.7 quality
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            resolve(dataUrl);
+        } else {
+            reject(new Error("Canvas context failed"));
+        }
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 const App: React.FC = () => {
-  // Initialize 50 empty slots initially
-  const [items, setItems] = useState<PortfolioItem[]>(() => 
-    Array.from({ length: TOTAL_SLOTS }, (_, i) => ({
+  // 1. INITIALIZATION STRATEGY
+  const [items, setItems] = useState<PortfolioItem[]>(() => {
+    if (INITIAL_DATA && INITIAL_DATA.length > 0) {
+        return Array.from({ length: TOTAL_SLOTS }, (_, i) => {
+            const staticItem = INITIAL_DATA.find(d => d.id === (i + 1));
+            return staticItem || {
+                id: i + 1,
+                imageData: null,
+                story: null,
+                isLoading: false,
+                error: null
+            };
+        });
+    }
+
+    return Array.from({ length: TOTAL_SLOTS }, (_, i) => ({
       id: i + 1,
       imageData: null,
       story: null,
       isLoading: false,
       error: null
-    }))
-  );
+    }));
+  });
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false); 
@@ -42,32 +105,24 @@ const App: React.FC = () => {
 
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. FIREBASE SYNC: Connect to Cloud Database on Mount
+  // 2. FIREBASE LISTENER
   useEffect(() => {
-    // This function runs automatically whenever data changes in the cloud
     const unsubscribe = subscribeToPortfolio((cloudData) => {
         if (cloudData && cloudData.length > 0) {
-            // Merge cloud data with strict 50 slots structure
-            const mergedItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
-                const found = cloudData.find((item: any) => item.id === (i + 1));
-                return found || {
-                    id: i + 1,
-                    imageData: null,
-                    story: null,
-                    isLoading: false,
-                    error: null
-                };
-            });
-            setItems(mergedItems);
+             setItems(prevItems => {
+                 const mergedItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
+                    const cloudItem = cloudData.find((item: any) => item.id === (i + 1));
+                    return cloudItem || prevItems[i];
+                 });
+                 return mergedItems;
+             });
         }
         setIsLoaded(true);
     });
 
-    // Cleanup connection when app closes
     return () => unsubscribe();
   }, []);
 
-  // Fake Analytics Logic
   useEffect(() => {
     const interval = setInterval(() => {
         setOnlineUsers(Math.floor(Math.random() * (85 - 12 + 1) + 12));
@@ -81,11 +136,10 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Login Logic
   const handleLogin = () => {
     if (loginUser === "admin" && loginPass === OWNER_PASSWORD) {
         setIsLoggedIn(true);
-        setLoginPass(""); // Clear password for security
+        setLoginPass(""); 
     } else {
         alert("Password Salah! Akses Ditolak.");
     }
@@ -96,7 +150,6 @@ const App: React.FC = () => {
     setLoginPass("");
   };
 
-  // Security Logic
   const handleAuthCheck = (): boolean => {
     if (isLoggedIn) {
         return true;
@@ -106,29 +159,28 @@ const App: React.FC = () => {
     }
   };
 
-  // 2. SAVE TO CLOUD LOGIC
+  // SAVE TO CLOUD LOGIC
   const handleSaveToCloud = async () => {
     if (!handleAuthCheck()) return;
     
-    if (window.confirm("Simpan perubahan ke Cloud agar tampil di Netlify?")) {
+    if (window.confirm("Simpan perubahan ke Firebase? Data akan terlihat oleh semua pengunjung.")) {
         setIsSyncing(true);
         try {
             await savePortfolioToCloud(items);
-            alert("✅ SUKSES! Data tersimpan di Cloud.\nPengunjung di Netlify akan melihat foto-foto ini secara otomatis.");
+            alert("✅ SUKSES! Perubahan tersimpan.");
         } catch (error) {
             console.error(error);
-            alert("❌ Gagal menyimpan. Cek koneksi internet.");
+            alert("❌ Gagal menyimpan. Pastikan internet stabil.");
         } finally {
             setIsSyncing(false);
         }
     }
   };
 
-  // DELETE ALL Logic
   const handleDeleteAll = () => {
     if (!handleAuthCheck()) return;
 
-    if (window.confirm("PERINGATAN BAHAYA: Apakah Anda yakin ingin menghapus SEMUA foto? Tindakan ini tidak dapat dibatalkan.")) {
+    if (window.confirm("PERINGATAN: Hapus SEMUA foto?")) {
         const resetItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => ({
             id: i + 1,
             imageData: null,
@@ -140,45 +192,38 @@ const App: React.FC = () => {
     }
   };
 
-  // Logic to process a single file upload - MANUAL MODE (No AI)
+  // MANUAL UPLOAD LOGIC WITH COMPRESSION
   const processSlotUpload = async (id: number, file: File, openModal: boolean = false) => {
-    const base64String = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
+    try {
+        // Step 1: Compress Image
+        const compressedBase64 = await compressImage(file);
 
-    // Default Manual Data
-    const defaultStory: StoryResponse = {
-        title: "JUDUL BARU",
-        story: "Tulis deskripsi prompt manual disini..."
-    };
-    const storyJson = JSON.stringify(defaultStory);
+        // Step 2: Set Manual Prompt Default
+        const defaultStory: StoryResponse = {
+            title: "JUDUL BARU",
+            story: "Tulis deskripsi prompt manual disini..."
+        };
+        const storyJson = JSON.stringify(defaultStory);
 
-    setItems(prev => prev.map(item => 
-      item.id === id 
-        ? { ...item, imageData: base64String, story: storyJson, isLoading: false, error: null } 
-        : item
-    ));
+        // Step 3: Update State
+        setItems(prev => prev.map(item => 
+          item.id === id 
+            ? { ...item, imageData: compressedBase64, story: storyJson, isLoading: false, error: null } 
+            : item
+        ));
 
-    // Update modal if it's the selected item
-    if (openModal) {
-         setSelectedItem({ 
-            id, 
-            imageData: base64String, 
-            story: storyJson, 
-            isLoading: false, 
-            error: null 
-        });
-    } else {
-         setSelectedItem(prev => (prev && prev.id === id) ? { 
-            id, 
-            imageData: base64String, 
-            story: storyJson, 
-            isLoading: false, 
-            error: null 
-        } : prev);
+        if (openModal) {
+             setSelectedItem({ 
+                id, 
+                imageData: compressedBase64, 
+                story: storyJson, 
+                isLoading: false, 
+                error: null 
+            });
+        }
+    } catch (err) {
+        console.error("Compression failed", err);
+        alert("Gagal memproses gambar.");
     }
   };
 
@@ -198,14 +243,13 @@ const App: React.FC = () => {
       const emptySlots = items.filter(i => !i.imageData);
 
       if (emptySlots.length === 0) {
-        alert("All slots are full! Delete some images to upload more.");
+        alert("Slot penuh! Hapus beberapa gambar dulu.");
         return;
       }
 
       setIsProcessingBulk(true);
       const filesToProcess = files.slice(0, emptySlots.length);
       
-      // Process sequentially but fast (no delay needed for manual)
       for (let i = 0; i < filesToProcess.length; i++) {
           const file = filesToProcess[i];
           const slotId = emptySlots[i].id;
@@ -296,7 +340,6 @@ const App: React.FC = () => {
                                 value={loginUser}
                                 readOnly
                                 className="w-16 sm:w-20 bg-slate-300 border-y-2 border-l-2 border-black px-2 py-1 text-xs font-bold text-slate-500 cursor-not-allowed text-center"
-                                title="Username automatically set to admin"
                             />
                             <input 
                                 type="password" 
@@ -323,20 +366,20 @@ const App: React.FC = () => {
                           
                           <button 
                             onClick={handleDeleteAll}
-                            className="text-[10px] font-bold bg-red-600 text-white px-2 py-1 border border-black hover:bg-red-700 transition-all flex items-center gap-1"
+                            className="text-[10px] font-bold bg-red-600 text-white px-2 py-1 border border-black hover:bg-red-700 transition-all"
                             title="Reset all images"
                           >
                              RESET
                           </button>
 
-                          {/* CLOUD SYNC BUTTON */}
+                          {/* SAVE PERUBAHAN BUTTON */}
                           <button 
                             onClick={handleSaveToCloud}
                             disabled={isSyncing}
-                            className={`text-[10px] font-bold text-white px-2 py-1 border border-black hover:bg-blue-600 transition-all flex items-center gap-1 ${isSyncing ? 'bg-slate-400 cursor-wait' : 'bg-blue-500 animate-pulse'}`}
-                            title="Upload data ke Firebase agar muncul di Netlify"
+                            className={`text-[10px] font-bold text-white px-2 py-1 border border-black hover:bg-blue-600 transition-all flex items-center gap-1 ${isSyncing ? 'bg-slate-400 cursor-wait' : 'bg-blue-500'}`}
+                            title="Simpan data ke Firebase agar terlihat oleh semua orang"
                           >
-                             {isSyncing ? 'UPLOADING...' : '☁️ SAVE TO CLOUD (LOCK)'}
+                             {isSyncing ? 'SAVING...' : '💾 SAVE PERUBAHAN'}
                           </button>
 
                           <div className="h-4 w-0.5 bg-slate-300"></div>
@@ -344,7 +387,7 @@ const App: React.FC = () => {
                             onClick={handleLogout}
                             className="text-[10px] font-bold text-red-500 hover:bg-red-500 hover:text-white px-2 py-0.5 transition-all"
                           >
-                            LOGOUT
+                            EXIT
                           </button>
                       </div>
                   )}
@@ -431,10 +474,6 @@ const App: React.FC = () => {
                         </li>
                     ))}
                 </ul>
-                
-                <div className="mt-6 text-[10px] font-mono font-bold text-center border-t-2 border-black pt-2 opacity-60">
-                    RECOMMENDED LINKS
-                </div>
             </div>
         </div>
 
