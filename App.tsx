@@ -4,6 +4,7 @@ import { PortfolioCard } from './components/PortfolioCard';
 import { StoryModal } from './components/StoryModal';
 import { generateStoryFromImage } from './services/geminiService';
 import { savePortfolioToDB, loadPortfolioFromDB } from './utils/storage';
+import { INITIAL_DATA } from './data/initialData';
 
 const TOTAL_SLOTS = 50;
 const OWNER_PASSWORD = "@Hilo123";
@@ -41,24 +42,36 @@ const App: React.FC = () => {
 
   const bulkInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Load Data from IndexedDB on Mount
+  // 1. Load Data from IndexedDB OR Initial Static Data (for Netlify visitors)
   useEffect(() => {
     const initData = async () => {
+        // First, try loading from local IndexedDB (User's browser cache)
         const storedItems = await loadPortfolioFromDB();
+        
+        let sourceData: PortfolioItem[] = [];
+
         if (storedItems && storedItems.length > 0) {
-            // Merge stored items with default structure to ensure 50 slots
-            const mergedItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
-                const found = storedItems.find(item => item.id === (i + 1));
-                return found || {
-                    id: i + 1,
-                    imageData: null,
-                    story: null,
-                    isLoading: false,
-                    error: null
-                };
-            });
-            setItems(mergedItems);
+            // Priority 1: User has local edits/cache
+            sourceData = storedItems;
+        } else if (INITIAL_DATA && INITIAL_DATA.length > 0) {
+            // Priority 2: No local cache, load "Baked-in" data from deployment
+            // Check if INITIAL_DATA is valid
+            sourceData = INITIAL_DATA;
         }
+
+        // Merge source data with default structure to ensure 50 slots
+        const mergedItems = Array.from({ length: TOTAL_SLOTS }, (_, i) => {
+            const found = sourceData.find(item => item.id === (i + 1));
+            return found || {
+                id: i + 1,
+                imageData: null,
+                story: null,
+                isLoading: false,
+                error: null
+            };
+        });
+        
+        setItems(mergedItems);
         setIsLoaded(true);
     };
     initData();
@@ -112,6 +125,27 @@ const App: React.FC = () => {
         alert("Akses Ditolak. Silakan Login sebagai Admin di kolom Header (Atas) terlebih dahulu.");
         return false;
     }
+  };
+
+  // Export Data Logic
+  const handleExportData = () => {
+    if (!handleAuthCheck()) return;
+
+    // Filter items to only save those with data to save file size
+    const filledItems = items.filter(item => item.imageData !== null);
+    
+    const fileContent = `import { PortfolioItem } from "../types";\n\nexport const INITIAL_DATA: PortfolioItem[] = ${JSON.stringify(filledItems, null, 2)};`;
+    
+    const blob = new Blob([fileContent], { type: "text/typescript" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "initialData.ts";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    alert("File 'initialData.ts' berhasil didownload!\n\nINSTRUKSI DEPLOY:\n1. Buka folder project Anda.\n2. Cari folder 'src/data/'.\n3. Ganti file 'initialData.ts' yang lama dengan file yang baru saja didownload.\n4. Push ke GitHub/Deploy ke Netlify.");
   };
 
   // Core logic to process a single file upload - Refactored to be Promise-based
@@ -327,6 +361,19 @@ const App: React.FC = () => {
                               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse border border-black"></span>
                               ADMIN ACCESS UNLOCKED
                           </span>
+                          
+                          {/* NEW EXPORT BUTTON FOR ADMIN */}
+                          <button 
+                            onClick={handleExportData}
+                            className="text-[10px] font-bold bg-blue-500 text-white px-2 py-1 border border-black hover:bg-blue-600 transition-all flex items-center gap-1"
+                            title="Download data to deploy to Netlify"
+                          >
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                             </svg>
+                             DEPLOY DATA
+                          </button>
+
                           <div className="h-4 w-0.5 bg-slate-300"></div>
                           <button 
                             onClick={handleLogout}
